@@ -1,4 +1,8 @@
-﻿Shader "CartoonVF/Foward Diffuse"
+﻿// Upgrade NOTE: replaced '_Object2World' with 'unity_ObjectToWorld'
+
+// Upgrade NOTE: replaced '_World2Object' with 'unity_WorldToObject'
+
+Shader "CartoonVF/Foward Diffuse"
 {
 	Properties
 	{
@@ -41,7 +45,8 @@
 				float2 uv : TEXCOORD0;
 				float2 uv2 : TEXCOORD1;
 				float3 lightDirection : TEXCOORD2;
-				LIGHTING_COORDS(3, 4)
+				float3 worldNormal : TEXCOORD3;
+				LIGHTING_COORDS(4, 5)
 			};
 
 			sampler2D _MainTex;
@@ -54,13 +59,19 @@
 			{
 				v2f o;
 
-				TANGENT_SPACE_ROTATION;
-				o.lightDirection = mul(rotation, ObjSpaceLightDir(v.vertex));
+				
+				
 				o.pos = UnityObjectToClipPos(v.vertex);				
 				o.uv = TRANSFORM_TEX(v.uv, _MainTex);
 				o.uv2 = TRANSFORM_TEX(v.uv, _BumpTex);
 				
-				TRANSFER_VERTEX_TO_FRAGMENT(o);
+				TANGENT_SPACE_ROTATION;
+				o.lightDirection = mul(rotation, ObjSpaceLightDir(v.vertex));
+				//o.lightDirection = ObjSpaceLightDir(v.vertex);
+				//o.lightDirection = mul((float3x3)unity_ObjectToWorld, ObjSpaceLightDir(v.vertex));
+				o.worldNormal = mul(SCALED_NORMAL,  (float3x3)unity_WorldToObject);
+
+				//TRANSFER_VERTEX_TO_FRAGMENT(o);
 
 				return o;
 			}
@@ -68,16 +79,16 @@
 			fixed4 frag (v2f i) : COLOR
 			{
 				fixed4 col = tex2D(_MainTex, i.uv);
-				float3 n = UnpackNormal(tex2D(_BumpTex, i.uv2));
-
-				float3 lightColor = UNITY_LIGHTMODEL_AMBIENT.xyz * 2;
+				float3 normal = UnpackNormal(tex2D(_BumpTex, i.uv2));
+				
+				float3 ambi = UNITY_LIGHTMODEL_AMBIENT.xyz;
 				float atten = LIGHT_ATTENUATION(i);
+				fixed3 lambert = 0.5 * dot(normal, normalize(i.lightDirection)) + 0.5;
 
-				float diff = max(0, dot(n, normalize(_WorldSpaceLightPos0.xyz)));
-				lightColor += _LightColor0.rgb *  diff * atten;
+				float diff = _LightColor0.rgb * lambert  * 1;
 
-				col.rgb = col.rgb * lightColor * 2;
-			
+				col.rgb = col.rgb * (ambi + diff);
+				col.a = 1;
 				return col;
 			}
 			ENDCG
